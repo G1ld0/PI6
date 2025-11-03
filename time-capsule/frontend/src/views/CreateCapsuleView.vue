@@ -4,26 +4,31 @@
     
     <form @submit.prevent="handleSubmit" class="capsule-form">
       <div class="form-group">
-        <label for="message">Mensagem</label>
+        <label for="message">Mensagem (Opcional)</label>
         <textarea 
           id="message" 
           v-model="message" 
-          required 
           placeholder="Escreva sua mensagem para o futuro..."
           rows="5"
         ></textarea>
       </div>
       
       <div class="form-group">
-        <label for="image">Imagem</label>
+        <label for="files">Arquivos (Opcional)</label>
         <input 
           type="file" 
-          id="image" 
-          accept="image/*" 
-          @change="handleImageUpload"
+          id="files" 
+          accept="image/*,video/*,audio/*" 
+          multiple
+          @change="handleFileSelection"
         >
-        <div v-if="imagePreview" class="image-preview">
-          <img :src="imagePreview" alt="Pré-visualização da imagem">
+        <div v-if="selectedFiles.length > 0" class="file-preview-list">
+          <p>{{ selectedFiles.length }} arquivo(s) selecionado(s):</p>
+          <ul>
+            <li v-for="file in selectedFiles" :key="file.name">
+              {{ file.name }} ({{ getFileType(file.type) }})
+            </li>
+          </ul>
         </div>
       </div>
       
@@ -87,15 +92,16 @@
 
 <script setup>
 import 'leaflet/dist/leaflet.css'
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
+import { supabase } from '../composables/useSupabase' // Importa o cliente Supabase
 import L from 'leaflet'
+import { v4 as uuidv4 } from 'uuid' // Para gerar nomes de arquivo únicos
 
 const message = ref('')
-const imageFile = ref(null)
-const imagePreview = ref(null)
+const selectedFiles = ref([]) // Armazena os ARQUIVOS (File objects)
 const release_date = ref('')
 const useLocation = ref(false)
 const lat = ref(null)
@@ -110,7 +116,7 @@ let map, marker
 
 watch(useLocation, async (val) => {
   if (val) {
-    await nextTick() // Garante que o DOM já renderizou o #map
+    await nextTick()
     if (!map) {
       map = L.map('map').setView([lat.value || -23.5505, lng.value || -46.6333], 13)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -126,7 +132,6 @@ watch(useLocation, async (val) => {
       map.invalidateSize()
     }
   } else {
-    // Opcional: destruir o mapa se quiser liberar memória
     if (map) {
       map.remove()
       map = null
@@ -135,7 +140,6 @@ watch(useLocation, async (val) => {
   }
 })
 
-// Atualiza o marcador se lat/lng mudarem manualmente
 watch([lat, lng], ([newLat, newLng]) => {
   if (marker && map && newLat && newLng) {
     marker.setLatLng([newLat, newLng])
@@ -143,20 +147,19 @@ watch([lat, lng], ([newLat, newLng]) => {
   }
 })
 
-// Converte a imagem para base64 para pré-visualização
-const handleImageUpload = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    imageFile.value = file
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      imagePreview.value = e.target.result
-    }
-    reader.readAsDataURL(file)
-  }
+// Armazena os arquivos selecionados na ref
+const handleFileSelection = (event) => {
+  selectedFiles.value = Array.from(event.target.files)
 }
 
-// Obtém a localização atual do usuário
+// Converte o tipo MIME para um tipo simples (image, video, audio)
+const getFileType = (mimeType) => {
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('video/')) return 'video'
+  if (mimeType.startsWith('audio/')) return 'audio'
+  return 'other'
+}
+
 const getCurrentLocation = () => {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
@@ -173,10 +176,11 @@ const getCurrentLocation = () => {
   }
 }
 
-// Envia o formulário para criar a cápsula
+// [MUDANÇA AQUI] Lógica de envio totalmente nova
 const handleSubmit = async () => {
-  if (!imageFile.value) {
-    error.value = 'Por favor, selecione uma imagem'
+  // Validação: Pelo menos uma mensagem ou um arquivo
+  if (!message.value && selectedFiles.value.length === 0) {
+    error.value = 'Você deve adicionar uma mensagem ou pelo menos um arquivo.'
     return
   }
 
@@ -185,40 +189,73 @@ const handleSubmit = async () => {
   success.value = null
 
   try {
-    // Converte a imagem para base64
-    const reader = new FileReader()
-    reader.readAsDataURL(imageFile.value)
-    reader.onload = () => {
-      const imageBase64 = reader.result
-      
-      const payload = {
-        message: message.value,
-        image_base64: imageBase64,
-        open_date: release_date.value,
-        lat: useLocation.value ? lat.value : null,
-        lng: useLocation.value ? lng.value : null
-      }
+    const media_files = [] // Array para guardar os links do storage
+    const userId = authStore.userId // Pega o ID do usuário da sua store
 
-      axios.post(`${import.meta.env.VITE_API_URL}/capsules`, payload, {
-        headers: {
-          Authorization: `Bearer ${authStore.token}`
-        }
-      })
-      .then(response => {
-        success.value = 'Cápsula criada com sucesso!'
-        setTimeout(() => {
-          router.push('/capsules')
-        }, 1500)
-      })
-      .catch(err => {
-        error.value = err.response?.data?.error || 'Erro ao criar cápsula'
-      })
-      .finally(() => {
-        isSubmitting.value = false
+    if (!userId) {
+      throw new Error("Usuário não autenticado. Faça login novamente.")
+    }
+
+    // 1. Fazer o upload de cada arquivo para o Supabase Storage
+    for (const file of selectedFiles.value) {
+      const fileType = getFileType(file.type)
+      if (fileType === 'other') continue // Pula arquivos desconhecidos
+
+      const fileExt = file.name.split('.').pop()
+      // Cria um caminho único no Storage
+      const filePath = `user_${userId}/${uuidv4()}.${fileExt}`
+
+      // Faz o upload para o bucket 'capsule-media'
+      // ATENÇÃO: O bucket do seu app.py era 'capsule-media'.
+      // Se for outro, mude o nome aqui.
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('capsule-media') // Nome do seu bucket
+        .upload(filePath, file, {
+          contentType: file.type
+        })
+
+      if (uploadError) {
+        throw new Error(`Erro no upload do arquivo ${file.name}: ${uploadError.message}`)
+      }
+      
+      // Adiciona o arquivo à lista que será enviada ao backend
+      media_files.push({
+        storage_path: uploadData.path, // O caminho salvo
+        media_type: fileType
       })
     }
+
+    // 2. Montar o payload final para o backend Flask
+    const payload = {
+      message: message.value || null, // Envia null se estiver vazio
+      media_files: media_files,
+      open_date: release_date.value,
+      lat: useLocation.value ? lat.value : null,
+      lng: useLocation.value ? lng.value : null
+    }
+
+    // 3. Enviar o payload para o backend Flask
+    await axios.post(`${import.meta.env.VITE_API_URL}/capsules`, payload, {
+      headers: {
+        Authorization: `Bearer ${authStore.token}`
+      }
+    })
+
+    success.value = 'Cápsula criada com sucesso!'
+    setTimeout(() => {
+      router.push('/capsules')
+    }, 1500)
+
   } catch (err) {
-    error.value = 'Erro ao processar imagem: ' + err.message
+    // Tratamento de erro
+    if (err.response) {
+      error.value = err.response.data?.error || 'Erro do servidor'
+    } else if (err.request) {
+      error.value = 'Sem resposta do servidor. Verifique sua conexão.'
+    } else {
+      error.value = err.message || 'Erro ao criar cápsula'
+    }
+  } finally {
     isSubmitting.value = false
   }
 }
@@ -251,6 +288,7 @@ label {
 input[type="text"],
 input[type="number"],
 input[type="datetime-local"],
+input[type="file"],
 textarea {
   width: 100%;
   padding: 0.75rem;
@@ -263,14 +301,16 @@ textarea {
   resize: vertical;
 }
 
-.image-preview {
+/* Novo: Estilo para a lista de arquivos */
+.file-preview-list {
   margin-top: 1rem;
-}
-
-.image-preview img {
-  max-width: 100%;
-  max-height: 300px;
+  background: #4a6580;
+  padding: 0.5rem 1rem;
   border-radius: 4px;
+}
+.file-preview-list ul {
+  list-style-type: disc;
+  margin-left: 20px;
 }
 
 .location-fields {

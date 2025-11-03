@@ -85,18 +85,27 @@ def login():
         return jsonify({"error": str(e)}), 401
 
 # Rota para criar cápsulas
+# No arquivo backend/app.py
+
 @app.route('/capsules', methods=['POST'])
 @jwt_required()  # Exige autenticação via JWT
 def create_capsule():
     """
-    Cria uma cápsula no Supabase com mensagem, imagem, data e localização.
-    Corpo da requisição (JSON):
+    Cria uma cápsula no Supabase com mensagem, data, localização
+    e uma lista de mídias (fotos, vídeos, áudios) já enviadas
+    para o Supabase Storage pelo frontend.
+
+    Corpo da requisição (JSON) esperado:
     {
-        "message": "Texto da cápsula",
-        "image_base64": "data:image/jpeg;base64,...",
+        "message": "Texto da cápsula (opcional)",
+        "media_files": [
+            { "storage_path": "caminho/no/storage/imagem.png", "media_type": "image" },
+            { "storage_path": "caminho/no/storage/video.mp4", "media_type": "video" },
+            { "storage_path": "caminho/no/storage/audio.mp3", "media_type": "audio" }
+        ],
         "open_date": "2025-12-31T23:59:59",
-        "lat": -23.5505,
-        "lng": -46.6333
+        "lat": -23.5505 (opcional, pode ser null),
+        "lng": -46.6333 (opcional, pode ser null)
     }
     """
     try:
@@ -106,78 +115,63 @@ def create_capsule():
         if not data:
             return jsonify({"error": "Dados inválidos"}), 400
 
-        current_user_id = get_jwt_identity()  # Obtém o ID do usuário do token (user_id)
+        current_user_id = get_jwt_identity() # Obtém o ID do usuário do token (user_id)
 
-        # Campos obrigatórios
-        required_fields = ["message", "image_base64", "open_date", "lat", "lng"]
-        if not all(field in data for field in required_fields):
-            return jsonify({"error": f"Campos obrigatórios faltando: {required_fields}"}), 400
+        # 1. Validação dos campos
+        # A data de abertura é obrigatória
+        if 'open_date' not in data:
+            return jsonify({"error": "Campo 'open_date' é obrigatório"}), 400
+        
+        # Pelo menos uma mensagem ou um arquivo de mídia deve existir
+        message = data.get('message')
+        media_files = data.get('media_files', [])
+        
+        if not message or not media_files:
+            return jsonify({"error": "A cápsula deve conter ao menos uma mensagem ou um arquivo de mídia"}), 400
 
-        # Processamento da imagem
-        try:
-            # Separa o header do base64 (se existir)
-            if ',' in data['image_base64']:
-                header, image_data = data['image_base64'].split(',', 1)
-            else:
-                image_data = data['image_base64']
-            
-            # Decodifica o base64 para bytes
-            import base64
-            image_bytes = base64.b64decode(image_data)
-            
-            # Determina a extensão do arquivo
-            file_extension = 'jpg'  # padrão
-            if 'image/png' in header:
-                file_extension = 'png'
-            elif 'image/gif' in header:
-                file_extension = 'gif'
-            
-            # Gera um nome único para o arquivo
-            import uuid
-            file_name = f"user_{current_user_id}/{uuid.uuid4()}.{file_extension}"
-            
-        except Exception as e:
-            return jsonify({"error": "Imagem em formato inválido", "details": str(e)}), 400
-
-        # Faz upload para o Supabase Storage (nova forma de verificar erros)
-        try:
-            upload_response = supabase.storage.from_('capsule-images').upload(
-                file_name,
-                image_bytes,
-                {"content-type": f"image/{file_extension}"}
-            )
-            
-            # Verifica se houve erro no upload (nova forma)
-            if isinstance(upload_response, dict) and 'error' in upload_response:
-                raise Exception(upload_response['error'])
-            
-        except Exception as upload_error:
-            raise Exception(f"Erro no upload da imagem: {str(upload_error)}")
-
-        # Obtém URL pública da imagem
-        image_url = supabase.storage.from_('capsule-images').get_public_url(file_name)
-
-        # Criação da Cápsula no banco de dados
-        response = supabase.table('capsules').insert({
-            "message": data['message'],
-            "image_url": image_url,
+        # 2. Criação da Cápsula principal no banco
+        response_capsule = supabase.table('capsules').insert({
+            "message": message,
             "release_date": data['open_date'],
-            "lat": data['lat'],
-            "lng": data['lng'],
+            "lat": data.get('lat'), # .get() aceita valores nulos
+            "lng": data.get('lng'),
             "user_id": current_user_id
         }).execute()
 
-        if not response.data:
-            raise Exception("Falha ao inserir no banco de dados")
+        if not response_capsule.data:
+            raise Exception("Falha ao inserir na tabela 'capsules'")
+
+        capsule_id = response_capsule.data[0]['id']
+
+        # 3. Insere os arquivos de mídia na nova tabela 'capsule_media'
+        if media_files:
+            media_to_insert = []
+            for media in media_files:
+                if 'storage_path' in media and 'media_type' in media:
+                    media_to_insert.append({
+                        "capsule_id": capsule_id,
+                        "storage_path": media['storage_path'],
+                        "media_type": media['media_type']
+                    })
+            
+            if media_to_insert:
+                response_media = supabase.table('capsule_media').insert(media_to_insert).execute()
+                if not response_media.data:
+                    # Se falhar aqui, idealmente deveríamos deletar a cápsula (rollback)
+                    # Mas por simplicidade, vamos apenas reportar o erro
+                    raise Exception("Falha ao inserir mídias na tabela 'capsule_media'")
 
         return jsonify({
             "status": "success",
-            "image_url": image_url,
-            "capsule_id": response.data[0]['id']
+            "capsule_id": capsule_id
         }), 201
 
     except Exception as e:
         print("\nErro na criação da cápsula:", str(e))
+        # Tenta deletar a cápsula principal se a inserção de mídias falhar
+        if 'capsule_id' in locals():
+            supabase.table('capsules').delete().eq('id', capsule_id).execute()
+        
         return jsonify({
             "error": "Erro ao processar a requisição",
             "details": str(e)
