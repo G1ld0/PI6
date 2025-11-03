@@ -46,7 +46,7 @@ def hello():
     return "Backend do Time Capsule funcionando"
 
 # Rota de login
-@app.route('/login', methods=['POST'])
+@app.route('/api/login', methods=['POST'])
 def login():
     """
     Autentica usuário via Supabase Auth e retorna um JWT.
@@ -85,7 +85,7 @@ def login():
         return jsonify({"error": str(e)}), 401
 
 # Rota para criar cápsulas
-@app.route('/capsules', methods=['POST'])
+@app.route('/api/capsules', methods=['POST'])
 @jwt_required()  # Exige autenticação via JWT
 def create_capsule():
     """
@@ -184,7 +184,7 @@ def create_capsule():
         }), 500
 
 
-@app.route('/capsules', methods=['GET'])
+@app.route('/api/capsules', methods=['GET'])
 @jwt_required()
 def list_capsules():
     """
@@ -229,7 +229,7 @@ def list_capsules():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/capsules/<capsule_id>', methods=['GET'])
+@app.route('/api/capsules/<capsule_id>', methods=['GET'])
 @jwt_required()
 def get_capsule(capsule_id):
     try:
@@ -250,7 +250,7 @@ def get_capsule(capsule_id):
         print(f"Erro ao buscar cápsula: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/capsules/<capsule_id>/check', methods=['GET'])
+@app.route('/api/capsules/<capsule_id>/check', methods=['GET'])
 @jwt_required()
 def check_capsule(capsule_id):
     """
