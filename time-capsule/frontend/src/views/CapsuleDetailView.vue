@@ -175,7 +175,7 @@ const reCheck = () => {
 
 // Busca os dados quando o componente é montado
 onMounted(() => {
-  fetchCapsl()
+  fetchCapsule()
 })
 </script>
 
