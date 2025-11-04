@@ -12,7 +12,8 @@ from flask_jwt_extended import (
 import uuid
 from math import radians, sin, cos, sqrt, atan2
 from flask_cors import CORS
-from datetime import datetime # [CORREÇÃO] Importa o datetime
+from datetime import datetime
+import traceback # <-- ADICIONADO PARA LOGS DETALHADOS
 
 # Carrega variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -32,7 +33,7 @@ CORS(app, resources={
     }
 })
 
-# Configuração do JWT (JSON Web Tokens)
+# Configuração do JWT
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
 jwt = JWTManager(app)
 
@@ -64,6 +65,8 @@ def login():
         }), 200
 
     except Exception as e:
+        print(f"Erro no login: {str(e)}")
+        traceback.print_exc() # <-- LOG DETALHADO
         return jsonify({"error": str(e)}), 401
 
 # Rota para criar cápsulas
@@ -83,8 +86,6 @@ def create_capsule():
         message = data.get('message')
         media_files = data.get('media_files', [])
         
-        # [CORREÇÃO 1] A lógica estava errada (era 'or').
-        # Agora permite que a cápsula tenha SÓ mensagem, SÓ mídias, ou ambos.
         if not message and not media_files:
             return jsonify({"error": "A cápsula deve conter ao menos uma mensagem ou um arquivo de mídia"}), 400
 
@@ -122,7 +123,8 @@ def create_capsule():
         }), 201
 
     except Exception as e:
-        print("\nErro na criação da cápsula:", str(e))
+        print(f"\nErro na criação da cápsula: {str(e)}")
+        traceback.print_exc() # <-- LOG DETALHADO
         if 'capsule_id' in locals():
             supabase.table('capsules').delete().eq('id', capsule_id).execute()
         return jsonify({
@@ -136,13 +138,13 @@ def create_capsule():
 def list_capsules():
     try:
         user_id = get_jwt_identity()
-        # [CORREÇÃO] Simplificado para retornar os dados brutos, o frontend pode formatar
         response = supabase.table('capsules').select('id,message,image_url,release_date,lat,lng,created_at').eq('user_id', user_id).execute()
         
         return jsonify({"capsules": response.data}), 200
         
     except Exception as e:
         print(f"Erro ao listar cápsulas: {str(e)}")
+        traceback.print_exc() # <-- LOG DETALHADO
         return jsonify({"error": str(e)}), 500
 
 # Rota para buscar uma cápsula
@@ -159,11 +161,8 @@ def get_capsule(capsule_id):
                          .single() \
                          .execute()
         
-        # [CORREÇÃO 2] Este é o Erro 500 principal.
-        # 'response.data' JÁ É o objeto (ou None), não 'response.data[0]'.
         capsule_data = response.data
         
-        # Adicionamos esta verificação para evitar o crash se a cápsula não for encontrada
         if capsule_data is None:
             return jsonify({"error": "Cápsula não encontrada ou pertence a outro usuário"}), 404
         
@@ -189,7 +188,7 @@ def get_capsule(capsule_id):
         
     except Exception as e:
         print(f"Erro ao buscar cápsula: {str(e)}")
-        print(f"Exceção detalhada: {type(e).__name__} - {e}")
+        traceback.print_exc() # <-- LOG DETALHADO
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
 
 # Rota para checar se a cápsula pode ser aberta
@@ -204,56 +203,4 @@ def check_capsule(capsule_id):
         response = supabase.table('capsules').select('release_date,lat,lng').eq('id', capsule_id).eq('user_id', user_id).execute()
         if not response.data:
             return jsonify({"error": "Cápsula não encontrada"}), 404
-        capsule = response.data[0]
-
-        now = datetime.now()
-        release_date = datetime.fromisoformat(capsule['release_date'])
-        
-        if now < release_date:
-            return jsonify({
-                "can_open": False,
-                "reason": f"Disponível em {release_date.strftime('%d/%m/%Y %H:%M')}"
-            }), 200
-
-        # [CORREÇÃO 3] Este é o segundo Erro 500.
-        # Só podemos calcular a distância se a cápsula TEM uma localização
-        # E o usuário TAMBÉM enviou a sua localização.
-        if capsule['lat'] and capsule['lng']:
-            if user_lat is None or user_lng is None:
-                return jsonify({
-                    "can_open": False,
-                    "reason": "Esta cápsula requer sua localização. Por favor, habilite-a."
-                }), 200
-            
-            distance = calculate_distance(
-                capsule['lat'], capsule['lng'],
-                user_lat, user_lng
-            )
-            
-            if distance > 0.1:  # 0.1 km = 100 metros
-                return jsonify({
-                    "can_open": False,
-                    "reason": "Você não está no local correto"
-                }), 200
-
-        # Se passou pela data e (se necessário) pela localização, pode abrir.
-        return jsonify({"can_open": True}), 200
-
-    except Exception as e:
-        print(f"Erro ao checar cápsula: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-# Função de cálculo de distância
-def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371.0
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
-
-# Inicia o servidor Flask
-if __name__ == '__main__':
-    # [CORREÇÃO] Lendo a porta do ambiente, como o Render espera
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+        capsule = response.data
