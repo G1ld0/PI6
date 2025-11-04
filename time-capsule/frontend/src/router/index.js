@@ -46,10 +46,11 @@ const router = createRouter({
   routes
 })
 
+// No seu arquivo frontend/src/router/index.js
+
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
-  
-  if (to.meta.requiresAuth && !authStore.user) {
+  if (to.meta.requiresAuth && !authStore.token) { 
     next('/login')
   } else {
     next()
