@@ -15,6 +15,11 @@
         <h2>🔒 Cápsula Trancada</h2>
         <p>{{ checkResult.reason }}</p>
         <p v-if="capsuleDate">Data de liberação: {{ formatDate(capsuleDate) }}</p>
+        
+        <div v-if="capsuleLatLgn" class="location-map-container">
+          <LocationMap :lat="capsuleLatLgn.lat" :lng="capsuleLatLgn.lng" />
+        </div>
+        
         <button @click="reCheck" class="recheck-btn">Tentar novamente</button>
       </div>
 
@@ -53,23 +58,27 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
+// [A CORREÇÃO ESTÁ AQUI] Importa o componente do mapa
+import LocationMap from '../components/LocationMap.vue' 
 
 const route = useRoute()
 const authStore = useAuthStore()
 
-const capsule = ref(null) // Para os dados completos da cápsula
+const capsule = ref(null)
 const loading = ref(true)
 const error = ref(null)
-const checkResult = ref(null) // Para o resultado do /check
-const capsuleDate = ref(null) // Para armazenar a data de liberação
+const checkResult = ref(null)
+const capsuleDate = ref(null)
+// [A CORREÇÃO ESTÁ AQUI] Ref para guardar a localização da cápsula
+const capsuleLatLgn = ref(null) 
 
 const capsuleId = route.params.id
 
-// Função para buscar a localização atual do usuário
 const getCurrentLocation = () => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (!navigator.geolocation) {
-      reject(new Error('Geolocalização não é suportada pelo seu navegador.'))
+      console.warn('Geolocalização não suportada.')
+      resolve({ lat: null, lng: null })
       return
     }
     navigator.geolocation.getCurrentPosition(
@@ -80,7 +89,6 @@ const getCurrentLocation = () => {
         })
       },
       (err) => {
-        // Se o usuário negar, continuamos com lat/lng nulos
         console.warn('Usuário negou geolocalização.', err.message)
         resolve({ lat: null, lng: null })
       }
@@ -100,10 +108,9 @@ const fetchCapsule = async () => {
   }
 
   try {
-    // 1. Pega a localização do usuário
     const location = await getCurrentLocation()
 
-    // 2. CHAMA O /check para ver se pode abrir
+    // 1. CHAMA O /check para ver se pode abrir
     const checkResponse = await axios.get(
       `${import.meta.env.VITE_API_URL}/capsules/${capsuleId}/check`,
       {
@@ -117,7 +124,7 @@ const fetchCapsule = async () => {
     
     checkResult.value = checkResponse.data
 
-    // 3. Se PUDER ABRIR, busca o conteúdo completo
+    // 2. Se PUDER ABRIR, busca o conteúdo completo
     if (checkResult.value.can_open) {
       const capsuleResponse = await axios.get(
         `${import.meta.env.VITE_API_URL}/capsules/${capsuleId}`,
@@ -127,16 +134,19 @@ const fetchCapsule = async () => {
       )
       capsule.value = capsuleResponse.data
     } else {
-      // Se não puder abrir, tentamos pegar a data de liberação para mostrar
-      // Isso é opcional, mas melhora a UI
+      // 3. Se NÃO PUDER ABRIR, buscamos os dados mesmo assim para mostrar o mapa/data
       try {
         const capsuleInfo = await axios.get(
           `${import.meta.env.VITE_API_URL}/capsules/${capsuleId}`,
           { headers: { Authorization: `Bearer ${authStore.token}` } }
         )
         capsuleDate.value = capsuleInfo.data.release_date
+        // [A CORREÇÃO ESTÁ AQUI] Salva o lat/lng para o mapa
+        if (capsuleInfo.data.lat && capsuleInfo.data.lng) {
+          capsuleLatLgn.value = { lat: capsuleInfo.data.lat, lng: capsuleInfo.data.lng }
+        }
       } catch (infoError) {
-        // Não faz nada se falhar, o motivo do 'check' já é suficiente
+        // Erro ao buscar info, o motivo do 'check' já é suficiente
       }
     }
 
@@ -165,7 +175,7 @@ const reCheck = () => {
 
 // Busca os dados quando o componente é montado
 onMounted(() => {
-  fetchCapsule()
+  fetchCapsl()
 })
 </script>
 
@@ -196,6 +206,16 @@ onMounted(() => {
 .capsule-locked h2 {
   font-size: 2rem;
 }
+/* [A CORREÇÃO ESTÁ AQUI] Estilo para o container do mapa */
+.location-map-container {
+  width: 100%;
+  height: 300px;
+  margin: 1.5rem auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #a2d9ff; /* Cor de fundo enquanto o mapa carrega */
+}
+
 .recheck-btn {
   margin-top: 1rem;
   padding: 0.75rem 1.5rem;
@@ -220,7 +240,7 @@ onMounted(() => {
 .message-text {
   font-size: 1.2rem;
   line-height: 1.6;
-  white-space: pre-wrap; /* Preserva quebras de linha */
+  white-space: pre-wrap;
   background: rgba(0,0,0,0.1);
   padding: 1rem;
   border-radius: 4px;
