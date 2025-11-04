@@ -154,18 +154,23 @@ def get_capsule(capsule_id):
     try:
         user_id = get_jwt_identity()
         
+        # [A CORREÇÃO ESTÁ AQUI]
+        # Removemos o .single() que estava a causar o crash da biblioteca.
+        # Agora fazemos como a função check_capsule (que funciona).
         response = supabase.table('capsules') \
                          .select('*') \
                          .eq('id', capsule_id) \
                          .eq('user_id', user_id) \
-                         .single() \
-                         .execute()
+                         .execute() # Removemos o .single()
         
-        capsule_data = response.data
-        
-        if capsule_data is None:
+        # Se a lista de dados estiver vazia, não foi encontrada
+        if not response.data:
             return jsonify({"error": "Cápsula não encontrada ou pertence a outro usuário"}), 404
         
+        # Pegamos o primeiro item da lista, tal como a check_capsule faz
+        capsule_data = response.data[0]
+        
+        # O resto da função continua igual...
         response_media = supabase.table('capsule_media') \
                                .select('media_type, storage_path') \
                                .eq('capsule_id', capsule_id) \
@@ -188,7 +193,7 @@ def get_capsule(capsule_id):
         
     except Exception as e:
         print(f"Erro ao buscar cápsula: {str(e)}")
-        traceback.print_exc() # LOG DETALHADO
+        traceback.print_exc() # Mantemos o log detalhado
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
 
 # Rota para checar se a cápsula pode ser aberta
