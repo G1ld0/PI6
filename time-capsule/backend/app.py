@@ -136,6 +136,7 @@ def create_capsule():
 def list_capsules():
     try:
         user_id = get_jwt_identity()
+        # [CORREÇÃO] Simplificado para retornar os dados brutos, o frontend pode formatar
         response = supabase.table('capsules').select('id,message,image_url,release_date,lat,lng,created_at').eq('user_id', user_id).execute()
         
         return jsonify({"capsules": response.data}), 200
@@ -158,7 +159,7 @@ def get_capsule(capsule_id):
                          .single() \
                          .execute()
         
-        # [CORREÇÃO 2] Esta é a correção do Erro 500 principal.
+        # [CORREÇÃO 2] Este é o Erro 500 principal.
         # 'response.data' JÁ É o objeto (ou None), não 'response.data[0]'.
         capsule_data = response.data
         
@@ -254,4 +255,5 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 
 # Inicia o servidor Flask
 if __name__ == '__main__':
+    # [CORREÇÃO] Lendo a porta do ambiente, como o Render espera
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
