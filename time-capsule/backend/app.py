@@ -13,7 +13,7 @@ import uuid
 from math import radians, sin, cos, sqrt, atan2
 from flask_cors import CORS
 from datetime import datetime
-import traceback # <-- ADICIONADO PARA LOGS DETALHADOS
+import traceback # Importa o traceback para logs detalhados
 
 # Carrega variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -66,7 +66,7 @@ def login():
 
     except Exception as e:
         print(f"Erro no login: {str(e)}")
-        traceback.print_exc() # <-- LOG DETALHADO
+        traceback.print_exc() # LOG DETALHADO
         return jsonify({"error": str(e)}), 401
 
 # Rota para criar cápsulas
@@ -124,7 +124,7 @@ def create_capsule():
 
     except Exception as e:
         print(f"\nErro na criação da cápsula: {str(e)}")
-        traceback.print_exc() # <-- LOG DETALHADO
+        traceback.print_exc() # LOG DETALHADO
         if 'capsule_id' in locals():
             supabase.table('capsules').delete().eq('id', capsule_id).execute()
         return jsonify({
@@ -144,7 +144,7 @@ def list_capsules():
         
     except Exception as e:
         print(f"Erro ao listar cápsulas: {str(e)}")
-        traceback.print_exc() # <-- LOG DETALHADO
+        traceback.print_exc() # LOG DETALHADO
         return jsonify({"error": str(e)}), 500
 
 # Rota para buscar uma cápsula
@@ -188,7 +188,7 @@ def get_capsule(capsule_id):
         
     except Exception as e:
         print(f"Erro ao buscar cápsula: {str(e)}")
-        traceback.print_exc() # <-- LOG DETALHADO
+        traceback.print_exc() # LOG DETALHADO
         return jsonify({"error": "Erro interno do servidor", "details": str(e)}), 500
 
 # Rota para checar se a cápsula pode ser aberta
@@ -203,4 +203,54 @@ def check_capsule(capsule_id):
         response = supabase.table('capsules').select('release_date,lat,lng').eq('id', capsule_id).eq('user_id', user_id).execute()
         if not response.data:
             return jsonify({"error": "Cápsula não encontrada"}), 404
-        capsule = response.data
+        capsule = response.data[0]
+
+        now = datetime.now()
+        release_date = datetime.fromisoformat(capsule['release_date'])
+        
+        if now < release_date:
+            return jsonify({
+                "can_open": False,
+                "reason": f"Disponível em {release_date.strftime('%d/%m/%Y %H:%M')}"
+            }), 200
+
+        if capsule['lat'] and capsule['lng']:
+            if user_lat is None or user_lng is None:
+                return jsonify({
+                    "can_open": False,
+                    "reason": "Esta cápsula requer sua localização. Por favor, habilite-a."
+                }), 200
+            
+            distance = calculate_distance(
+                capsule['lat'], capsule['lng'],
+                user_lat, user_lng
+            )
+            
+            if distance > 0.1:  # 0.1 km = 100 metros
+                return jsonify({
+                    "can_open": False,
+                    "reason": "Você não está no local correto"
+                }), 200
+
+        return jsonify({"can_open": True}), 200
+
+    except Exception as e:
+        print(f"Erro ao checar cápsula: {str(e)}")
+        traceback.print_exc() # LOG DETALHADO
+        return jsonify({"error": str(e)}), 500
+
+# Função de cálculo de distância
+def calculate_distance(lat1, lon1, lat2, lon2):
+    # Função 'radians' pode falhar se receber None, mas a verificação
+    # 'if user_lat is None' na rota 'check_capsule' previne isso.
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
+
+# Inicia o servidor Flask
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
