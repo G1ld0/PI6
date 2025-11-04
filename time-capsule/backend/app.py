@@ -242,7 +242,7 @@ def get_capsule(capsule_id):
                          .execute()
         
         # response.data já será o objeto da cápsula, não uma lista
-        capsule_data = response.data
+        capsule_data = response.data[0]
         
         # 2. Busca as mídias associadas
         response_media = supabase.table('capsule_media') \

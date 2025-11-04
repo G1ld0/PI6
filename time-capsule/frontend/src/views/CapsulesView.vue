@@ -26,15 +26,20 @@
         
         <div class="card-image-container">
           <img 
-            v-if="capsule.image_url" 
+            v-if="getCapsuleStatus(capsule) === 'available' && capsule.image_url" 
             :src="capsule.image_url" 
             alt="Imagem da cápsula" 
             class="capsule-image"
             @error="handleImageError"
           >
           <div v-else class="media-icon-placeholder">
-            <span>🖼️ 📹 🎵</span>
-            <p>Contém Mídias</p>
+            <span v-if="getCapsuleStatus(capsule) === 'locked_location'">🔒</span>
+            <span v-else-if="getCapsuleStatus(capsule) === 'available' && !capsule.image_url">🖼️ 📹 🎵</span>
+            <span v-else>⏳</span>
+            
+            <p v-if="getCapsuleStatus(capsule) === 'locked_location'">Requer Localização</p>
+            <p v-else-if="getCapsuleStatus(capsule) === 'available' && !capsule.image_url">Contém Mídias</p>
+            <p v-else>Bloqueada</p>
           </div>
         </div>
 
@@ -56,35 +61,29 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { format, isAfter, parseISO } from 'date-fns'
 import { useAuthStore } from '../stores/auth'
-import { useRouter } from 'vue-router' // Importa o Router
+import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
-const router = useRouter() // Inicializa o Router
+const router = useRouter()
 
 const capsules = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-// Formata a data
 const formatDate = (dateString) => {
   if (!dateString) return ''
   return format(parseISO(dateString), 'dd/MM/yyyy HH:mm')
 }
 
-// Trunca mensagens longas
 const truncateMessage = (msg) => {
   if (!msg) return 'Cápsula de Mídias'
   return msg.length > 50 ? msg.slice(0, 50) + '...' : msg
 }
 
-// Fallback para imagens quebradas (útil para links antigos)
 const handleImageError = (e) => {
-  e.target.style.display = 'none' // Esconde a imagem quebrada
-  // Você pode substituir por um placeholder se quiser
-  // e.target.src = 'https://placehold.co/600x400?text=Erro'
+  e.target.style.display = 'none'
 }
 
-// Busca as cápsulas no backend
 const fetchCapsules = async () => {
   try {
     loading.value = true
@@ -92,7 +91,6 @@ const fetchCapsules = async () => {
     const response = await axios.get(`${import.meta.env.VITE_API_URL}/capsules`, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
-    // Ordena as cápsulas pela data de criação, mais novas primeiro
     capsules.value = response.data.capsules.sort((a, b) => 
       new Date(b.created_at) - new Date(a.created_at)
     )
@@ -103,24 +101,36 @@ const fetchCapsules = async () => {
   }
 }
 
-// Verifica se a data de liberação já passou
-const isDateAvailable = (capsuleItem) =>
-  isAfter(new Date(), parseISO(capsuleItem.release_date))
+// [MUDANÇA] Lógica de status corrigida
+const getCapsuleStatus = (capsule) => {
+  const dateHasPassed = isAfter(new Date(), parseISO(capsule.release_date));
+  const hasLocation = capsule.lat !== null && capsule.lng !== null;
 
-// Retorna a classe de CSS para o status
-const statusClass = (capsuleItem) =>
-  isDateAvailable(capsuleItem) ? 'available' : 'locked'
+  if (!dateHasPassed) {
+    return 'locked_date'; // Bloqueada (Data)
+  }
+  if (hasLocation) {
+    return 'locked_location'; // Bloqueada (Localização)
+  }
+  return 'available'; // Disponível
+}
 
-// Retorna o texto de status
-const statusText = (capsuleItem) =>
-  isDateAvailable(capsuleItem) ? 'Disponível' : 'Bloqueada'
+const statusClass = (capsule) => {
+  const status = getCapsuleStatus(capsule);
+  return (status === 'available') ? 'available' : 'locked';
+}
 
-// [MUDANÇA] Navega para a página de detalhes
+const statusText = (capsule) => {
+  const status = getCapsuleStatus(capsule);
+  if (status === 'locked_date') return 'Bloqueada';
+  if (status === 'locked_location') return 'Requer Localização';
+  return 'Disponível';
+}
+
 const goToDetail = (capsuleItem) => {
   router.push(`/capsules/${capsuleItem.id}`)
 }
 
-// Busca as cápsulas ao carregar o componente
 onMounted(fetchCapsules)
 </script>
 
@@ -181,7 +191,7 @@ h1 {
   display: flex;
   flex-direction: column;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  color: #2c3e50; /* Texto escuro no card claro */
+  color: #2c3e50;
 }
 
 .capsule-card:hover {
@@ -197,6 +207,7 @@ h1 {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .capsule-image {
@@ -211,18 +222,20 @@ h1 {
   align-items: center;
   justify-content: center;
   color: #5a7a96;
+  text-align: center;
 }
 .media-icon-placeholder span {
   font-size: 2.5rem;
 }
 .media-icon-placeholder p {
   margin: 0.5rem 0 0;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .capsule-info {
   padding: 1rem;
-  flex-grow: 1; /* Faz o conteúdo empurrar o status para baixo */
+  flex-grow: 1;
 }
 
 .capsule-info h3 {
@@ -243,7 +256,6 @@ h1 {
   text-align: center;
   font-weight: 600;
   font-size: 0.9rem;
-  border-top: 1px solid #f0f2f5;
 }
 
 .capsule-status.available {
