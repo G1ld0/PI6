@@ -71,6 +71,48 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // [NOVA FUNÇÃO DE REGISTO - PASSO 5]
+    // Esta é a nova função que você deve adicionar
+    async register(email, password) {
+      this.isLoading = true
+      this.error = null
+      
+      try {
+        // 1. Dizemos ao Supabase para onde redirecionar o utilizador
+        //    APÓS ele clicar no link do email.
+        const redirectTo = `${window.location.origin}/email-confirmed`
+
+        // 2. Tenta criar o novo usuário no Supabase
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            redirectTo: redirectTo // Nome correto é 'redirectTo'
+          }
+        })
+
+        if (signUpError) throw signUpError
+
+        // 3. NÃO fazemos mais o login. Apenas retornamos sucesso.
+        // O utilizador terá de confirmar o email primeiro.
+        return true
+
+      } catch (error) {
+        console.error('Erro no registo:', error)
+        if (error.message.includes("User already registered")) {
+            this.error = "Este email já está registado."
+        } else {
+            this.error = error.response?.data?.error || 
+                       error.message || 
+                       'Erro ao criar a conta'
+        }
+        return false
+      } finally {
+        this.isLoading = false
+      }
+    },
+    // [FIM DA NOVA FUNÇÃO]
+
     async logout() {
       try {
         await supabase.auth.signOut()
@@ -91,7 +133,7 @@ export const useAuthStore = defineStore('auth', {
 
     async checkAuth() {
       // Esta função agora serve para 'hidratar' o objeto 'user'
-      // e verificar se a sessão do Supabase ainda é válida.
+      // e verificar if a sessão do Supabase ainda é válida.
       // O token e o userId já foram carregados no 'state'.
       try {
         const { data } = await supabase.auth.getUser()
