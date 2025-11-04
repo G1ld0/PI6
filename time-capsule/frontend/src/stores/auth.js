@@ -1,15 +1,26 @@
 import { defineStore } from 'pinia'
 import { supabase } from '../composables/useSupabase'
 import axios from 'axios'
-import { useRouter } from 'vue-router'
+// 'useRouter' não é usado aqui, pode ser removido
+// import { useRouter } from 'vue-router'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    user: null,
-    token: null,
+    // [MUDANÇA AQUI] Inicializamos o estado direto do localStorage
+    user: null, // O objeto 'user' completo do Supabase
+    token: localStorage.getItem('authToken') || null, // Nosso token JWT do backend
+    userId: localStorage.getItem('authUserId') || null, // O ID do usuário (UUID)
     isLoading: false,
     error: null
   }),
+
+  // [MUDANÇA AQUI] Adicionamos 'getters' para facilitar
+  getters: {
+    isAuthenticated: (state) => !!state.token,
+    // Isso garante que os componentes sempre possam pegar o ID
+    getUserId: (state) => state.userId 
+  },
+
   actions: {
     async login(email, password) {
       try {
@@ -39,35 +50,61 @@ export const useAuthStore = defineStore('auth', {
           throw new Error('Token não recebido do backend')
         }
     
+        // [MUDANÇA AQUI] Salvamos no estado
         this.user = supabaseData.user
         this.token = response.data.access_token
+        this.userId = response.data.user_id // <-- Importante
+        
+        // [MUDANÇA AQUI] E também salvamos no localStorage
+        localStorage.setItem('authToken', this.token)
+        localStorage.setItem('authUserId', this.userId)
         
         return true
       } catch (error) {
         console.error('Erro no login:', error)
         this.error = error.response?.data?.error || 
-                    error.message || 
-                    'Erro ao conectar com o servidor'
+                       error.message || 
+                       'Erro ao conectar com o servidor'
         return false
       } finally {
         this.isLoading = false
       }
     },
+
     async logout() {
       try {
         await supabase.auth.signOut()
+        
+        // [MUDANÇA AQUI] Limpamos o estado
         this.user = null
         this.token = null
+        this.userId = null
+        
+        // [MUDANÇA AQUI] E também limpamos o localStorage
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('authUserId')
+        
       } catch (error) {
         console.error('Erro no logout:', error)
       }
     },
+
     async checkAuth() {
+      // Esta função agora serve para 'hidratar' o objeto 'user'
+      // e verificar se a sessão do Supabase ainda é válida.
+      // O token e o userId já foram carregados no 'state'.
       try {
         const { data } = await supabase.auth.getUser()
         this.user = data.user
+        
+        // Se a sessão do Supabase expirou, mas tínhamos tokens locais,
+        // força um logout completo para limpar tudo.
+        if (!data.user && this.token) {
+          this.logout()
+        }
       } catch (error) {
         this.user = null
+        this.logout() // Força o logout se houver erro
       }
     }
   }
