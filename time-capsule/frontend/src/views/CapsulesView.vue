@@ -83,7 +83,7 @@ const loading = ref(true)
 const error = ref(null)
 
 // [CORREÇÃO DE FUSO]
-// Esta função lê a data UTC (14:11 Z) e a converte para o fuso local (11:11)
+// Esta função lê a data UTC (14:45 Z) e a converte para o fuso local (11:45)
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const date = parseISO(dateString) // Lê a data UTC
@@ -106,7 +106,6 @@ const fetchCapsules = async () => {
     const response = await axios.get(`${import.meta.env.VITE_API_URL}/capsules`, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
-    // O backend já envia o 'tipo' graças ao nosso passo anterior
     capsules.value = response.data.capsules.sort((a, b) => 
       new Date(b.created_at) - new Date(a.created_at)
     )
@@ -155,11 +154,7 @@ onMounted(fetchCapsules)
 
 <style scoped>
 /* Os seus estilos ... */
-.capsules-container {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
-}
+.capsules-container { padding: 2rem; max-width: 1200px; margin: 0 auto; }
 h1 { color: white; text-align: center; margin-bottom: 2rem; }
 .loading, .error-state, .empty-state { text-align: center; padding: 3rem; font-size: 1.2rem; color: #ccc; background: #35495e; border-radius: 8px; }
 .create-link, .retry-btn { display: inline-block; margin-top: 1rem; padding: 0.75rem 1.5rem; background-color: #42b983; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; border: none; cursor: pointer; }

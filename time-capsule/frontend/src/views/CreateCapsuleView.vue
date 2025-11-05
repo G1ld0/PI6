@@ -3,17 +3,30 @@
     <h1>Criar nova cápsula do tempo</h1>
     
     <form @submit.prevent="handleSubmit" class="capsule-form">
+      
       <div class="form-group">
-        <label for="message">Mensagem (Opcional)</label>
-        <textarea 
-          id="message" 
-          v-model="message" 
-          placeholder="Escreva sua mensagem para o futuro..."
-          rows="5"
-        ></textarea>
+        <label for="capsuleType">Tipo de Cápsula</label>
+        <select id="capsuleType" v-model="capsuleType" class="select-input" required>
+          <option value="digital">Digital (Abre no site)</option>
+          <option value="fisica">Física (Controla dispositivo IoT)</option>
+        </select>
+        <p class="field-description" v-if="capsuleType === 'fisica'">
+          Isto irá enviar um comando para o seu dispositivo físico (cps-001) na data de liberação.
+        </p>
       </div>
       
       <div class="form-group">
+        <label for="message">Mensagem (Nome da Cápsula)</label>
+        <textarea 
+          id="message" 
+          v-model="message" 
+          placeholder="Escreva sua mensagem ou nome..."
+          rows="5"
+          required
+        ></textarea>
+      </div>
+      
+      <div v-if="capsuleType === 'digital'" class="form-group">
         <label for="files">Arquivos (Opcional)</label>
         <input 
           type="file" 
@@ -41,19 +54,8 @@
           required
         >
       </div>
-
-      <div class="form-group">
-        <label for="capsuleType">Tipo de Cápsula</label>
-        <select id="capsuleType" v-model="capsuleType" class="select-input" required>
-          <option value="digital">Digital (Abre no site)</option>
-          <option value="fisica">Física (Controla dispositivo IoT)</option>
-        </select>
-        <p class="field-description" v-if="capsuleType === 'fisica'">
-          Isto irá enviar um comando para o seu dispositivo físico (cps-001) na data de liberação.
-        </p>
-      </div>
       
-      <div class="form-group">
+      <div v-if="capsuleType === 'digital'" class="form-group">
         <label>
           <input type="checkbox" v-model="useLocation"> 
           Liberar apenas em um local específico
@@ -62,30 +64,14 @@
         <div v-if="useLocation" class="location-fields">
           <div class="form-group">
             <label for="lat">Latitude</label>
-            <input
-              type="text"
-              id="lat"
-              :value="lat !== null ? lat.toFixed(10) : ''"
-              @input="lat = $event.target.value ? Number($event.target.value) : null"
-              placeholder="Ex: -23.5505000000"
-            />
+            <input type="text" id="lat" v-model="lat" placeholder="Ex: -23.5505000000" />
           </div>
           <div class="form-group">
             <label for="lng">Longitude</label>
-            <input
-              type="text"
-              id="lng"
-              :value="lng !== null ? lng.toFixed(10) : ''"
-              @input="lng = $event.target.value ? Number($event.target.value) : null"
-              placeholder="Ex: -46.6333000000"
-            />
+            <input type="text" id="lng" v-model="lng" placeholder="Ex: -46.6333000000" />
           </div>
           <div id="map" class="location-map"></div>
-          <button 
-            type="button" 
-            @click="getCurrentLocation"
-            class="location-btn"
-          >
+          <button type="button" @click="getCurrentLocation" class="location-btn">
             Usar minha localização atual
           </button>
         </div>
@@ -110,13 +96,10 @@ import { useAuthStore } from '../stores/auth'
 import { supabase } from '../composables/useSupabase'
 import L from 'leaflet'
 import { v4 as uuidv4 } from 'uuid'
-
-// [A CORREÇÃO ESTÁ AQUI] Importa as imagens dos marcadores
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 
-// [A CORREÇÃO ESTÁ AQUI] Sobrescreve os caminhos dos ícones do Leaflet
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -127,7 +110,7 @@ L.Icon.Default.mergeOptions({
 const message = ref('')
 const selectedFiles = ref([])
 const release_date = ref('')
-const capsuleType = ref('digital') // <-- [NOVA REF ADICIONADA]
+const capsuleType = ref('digital')
 const useLocation = ref(false)
 const lat = ref(null)
 const lng = ref(null)
@@ -200,9 +183,15 @@ const getCurrentLocation = () => {
 }
 
 const handleSubmit = async () => {
-  if (!message.value && selectedFiles.value.length === 0) {
-    error.value = 'Você deve adicionar uma mensagem ou pelo menos um arquivo.'
+  // [MUDANÇA] Todas as cápsulas precisam de uma mensagem/nome
+  if (!message.value) {
+    error.value = 'Por favor, adicione uma mensagem (nome) para a cápsula.'
     return
+  }
+  // Se for digital, mas não tiver mensagem NEM ficheiros (impossível por causa da regra acima)
+  if (capsuleType.value === 'digital' && selectedFiles.value.length === 0 && !message.value) {
+     error.value = 'Uma cápsula digital deve ter uma mensagem ou um ficheiro.'
+     return
   }
 
   isSubmitting.value = true
@@ -214,42 +203,45 @@ const handleSubmit = async () => {
     const userId = authStore.userId
 
     if (!userId) {
-      throw new Error("Usuário não autenticado. Faça login novamente.")
+      throw new Error("Usuário não autenticado.")
     }
 
-    for (const file of selectedFiles.value) {
-      const fileType = getFileType(file.type)
-      if (fileType === 'other') continue
+    // [MUDANÇA] Só faz upload de ficheiros se for 'digital'
+    if (capsuleType.value === 'digital') {
+      for (const file of selectedFiles.value) {
+        const fileType = getFileType(file.type)
+        if (fileType === 'other') continue
 
-      const fileExt = file.name.split('.').pop()
-      const filePath = `user_${userId}/${uuidv4()}.${fileExt}`
+        const fileExt = file.name.split('.').pop()
+        const filePath = `user_${userId}/${uuidv4()}.${fileExt}`
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('capsule-media') // Nome do seu bucket
-        .upload(filePath, file, {
-          contentType: file.type
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('capsule-media')
+          .upload(filePath, file, {
+            contentType: file.type
+          })
+
+        if (uploadError) {
+          throw new Error(`Erro no upload do arquivo ${file.name}: ${uploadError.message}`)
+        }
+        
+        media_files.push({
+          storage_path: uploadData.path,
+          media_type: fileType
         })
-
-      if (uploadError) {
-        throw new Error(`Erro no upload do arquivo ${file.name}: ${uploadError.message}`)
       }
-      
-      media_files.push({
-        storage_path: uploadData.path,
-        media_type: fileType
-      })
     }
 
-    // [PAYLOAD ATUALIZADO]
+    // Converte a data local selecionada para UTC
     const localDate = new Date(release_date.value);
-    const utcDateString = localDate.toISOString(); // (ex: "2025-11-05T13:55:00.000Z")
+    const utcDateString = localDate.toISOString();
 
     const payload = {
       message: message.value || null,
-      media_files: media_files,
-      open_date: utcDateString, // <-- Envia a data em UTC
-      lat: useLocation.value ? lat.value : null,
-      lng: useLocation.value ? lng.value : null,
+      media_files: media_files, // Estará vazia se for 'fisica'
+      open_date: utcDateString, // Envia em UTC
+      lat: (useLocation.value && capsuleType.value === 'digital') ? lat.value : null, // Só salva 'lat' se for digital
+      lng: (useLocation.value && capsuleType.value === 'digital') ? lng.value : null, // Só salva 'lng' se for digital
       tipo: capsuleType.value
     }
 
@@ -279,141 +271,25 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-.create-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-.capsule-form {
-  background: #35495e;/*#fff;*/
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: bold;
-}
-
-/* O main.css já deve estar a estilizar estes inputs para o tema escuro */
-input[type="text"],
-input[type="number"],
-input[type="datetime-local"],
-input[type="file"],
-textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-textarea {
-  resize: vertical;
-}
-
-.file-preview-list {
-  margin-top: 1rem;
-  background: #4a6580;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-}
-.file-preview-list ul {
-  list-style-type: disc;
-  margin-left: 20px;
-}
-
-.location-fields {
-  color: #2c3e50;
-  margin-top: 1rem;
-  padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 4px;
-}
-
-.location-fields input[type="number"] {
-  color: #2c3e50;
-  background: #fff;
-  border: 1.5px solid #35495e;
-  font-weight: bold;
-}
-
-.location-map {
-  width: 100%;
-  height: 300px;
-  margin-top: 1rem;
-  border-radius: 8px;
-  z-index: 1;
-}
-
-.location-btn {
-  background: #3498db;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 0.5rem;
-}
-
-.location-btn:hover {
-  background: #2980b9;
-}
-
-.submit-btn {
-  background: #42b983;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  width: 100%;
-}
-
-.submit-btn:hover {
-  background: #3aa876;
-}
-
-.submit-btn:disabled {
-  background: #cccccc;
-  cursor: not-allowed;
-}
-
-.error-message {
-  color: #e74c3c;
-  margin-top: 1rem;
-}
-
-.success-message {
-  color: #2ecc71;
-  margin-top: 1rem;
-}
-
-/* [NOVOS ESTILOS ADICIONADOS] */
-.select-input {
-  /* Estilo para combinar com o main.css escuro */
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #4a6580;
-  background: #35495e;
-  color: white;
-  border-radius: 4px;
-  font-size: 1rem;
-  box-sizing: border-box;
-}
-
-.field-description {
-  font-size: 0.9rem;
-  color: #c0d0e0; /* Ajustado para o fundo escuro do form */
-  margin-top: 0.5rem;
-  margin-bottom: 0;
-}
+/* Os seus estilos ... */
+.create-container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+.capsule-form { background: #35495e; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+.form-group { margin-bottom: 1.5rem; }
+label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+input[type="text"], input[type="number"], input[type="datetime-local"], input[type="file"], textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+textarea { resize: vertical; }
+.file-preview-list { margin-top: 1rem; background: #4a6580; padding: 0.5rem 1rem; border-radius: 4px; }
+.file-preview-list ul { list-style-type: disc; margin-left: 20px; }
+.location-fields { color: #2c3e50; margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 4px; }
+.location-fields input[type="number"] { color: #2c3e50; background: #fff; border: 1.5px solid #35495e; font-weight: bold; }
+.location-map { width: 100%; height: 300px; margin-top: 1rem; border-radius: 8px; z-index: 1; }
+.location-btn { background: #3498db; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 0.5rem; }
+.location-btn:hover { background: #2980b9; }
+.submit-btn { background: #42b983; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 1rem; width: 100%; }
+.submit-btn:hover { background: #3aa876; }
+.submit-btn:disabled { background: #cccccc; cursor: not-allowed; }
+.error-message { color: #e74c3c; margin-top: 1rem; }
+.success-message { color: #2ecc71; margin-top: 1rem; }
+.select-input { width: 100%; padding: 0.75rem; border: 1px solid #4a6580; background: #35495e; color: white; border-radius: 4px; font-size: 1rem; box-sizing: border-box; }
+.field-description { font-size: 0.9rem; color: #c0d0e0; margin-top: 0.5rem; margin-bottom: 0; }
 </style>
