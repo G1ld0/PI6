@@ -337,16 +337,31 @@ def check_capsule(capsule_id):
             return jsonify({"error": "Cápsula não encontrada"}), 404
         capsule = response.data[0]
 
-        now_utc = datetime.now(timezone.utc) # <-- Pega a hora atual em UTC, com fuso
-        # O Python lê a string UTC (ex: ...Z) e a converte para um objeto datetime com fuso
-        release_date_utc = datetime.fromisoformat(capsule['release_date']) 
+        # [CORREÇÃO DE FUSO HORÁRIO - AWARE vs NAIVE]
+        # Pega a hora atual, sempre com fuso (Aware)
+        now_utc = datetime.now(timezone.utc) 
+
+        # Pega a data do banco de dados
+        release_date_from_db_str = capsule['release_date']
+        release_date_obj = datetime.fromisoformat(release_date_from_db_str)
+
+        release_date_utc_aware = release_date_obj # Assume que já é 'aware'
+
+        # Se a data do banco for 'naive' (sem fuso), é uma cápsula antiga.
+        if release_date_obj.tzinfo is None:
+            # Informa o log e assume que a data 'naive' era UTC.
+            print(f"Aviso: Encontrada data 'naive' no DB: {release_date_from_db_str}. Assumindo UTC.")
+            release_date_utc_aware = release_date_obj.replace(tzinfo=timezone.utc)
         
-        if now_utc < release_date_utc:
+        # Agora a comparação é 'aware' vs 'aware', o que não dá erro.
+        if now_utc < release_date_utc_aware:
             return jsonify({
                 "can_open": False,
-                "reason": f"Disponível em {release_date.strftime('%d/%m/%Y %H:%M')}"
+                # O frontend irá buscar a data e formatá-la corretamente.
+                "reason": f"Disponível apenas após a data de liberação." 
             }), 200
 
+        # ... (O resto da sua lógica de localização, que está correta)
         if capsule['lat'] and capsule['lng']:
             if user_lat is None or user_lng is None:
                 return jsonify({
