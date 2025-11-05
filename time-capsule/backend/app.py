@@ -58,33 +58,34 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
-# No seu backend/app.py
-
-# No seu backend/app.py
-
+# [A CORREÇÃO ESTÁ AQUI]
 def publish_to_mqtt(payload_json):
     """
     Conecta-se ao broker HiveMQ via TLS e publica uma mensagem.
-    [VERSÃO MAIS ATUAL - v2.x]
+    Compatível com Paho MQTT v2.x (Sintaxe Corrigida)
     """
     try:
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        # 1. Define transporte no construtor
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, transport="tcp")
         
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
         
-        # [MUDANÇA] Sintaxe nova v2.x para TLS, com o 'transport'
-        # Isto agora irá funcionar porque o requirements.txt força a v2.x
-        client.tls_set(transport="tcp", tls_version=ssl.PROTOCOL_TLSv1_2)
-        client.tls_insecure_set(False) # Garante que o certificado seja validado
+        # 2. Configura TLS corretamente (sem o 'transport')
+        client.tls_set(tls_version=ssl.PROTOCOL_TLSv1_2)
+        client.tls_insecure_set(False)
         
         print(f"Tentando conectar ao broker MQTT (v2): {MQTT_BROKER_URL}...")
         client.connect(MQTT_BROKER_URL, MQTT_PORT, 60)
         
-        client.publish(MQTT_TOPIC, json.dumps(payload_json))
+        client.loop_start()  # 3. Inicia o loop de rede ANTES de publicar
         
-        client.loop_start()
+        # 4. Publica com QoS 1 para garantir entrega
+        result = client.publish(MQTT_TOPIC, json.dumps(payload_json), qos=1)
+        result.wait_for_publish()  # 5. Espera a confirmação do envio
+        
         client.disconnect()
         client.loop_stop()
+        
         print(f"Mensagem publicada com sucesso no tópico: {MQTT_TOPIC}")
         return True
 
@@ -92,21 +93,17 @@ def publish_to_mqtt(payload_json):
         print(f"!!!!!! ERRO AO PUBLICAR NO MQTT (v2) !!!!!!")
         traceback.print_exc()
         return False
+# [FIM DA CORREÇÃO]
 
 def check_expired_capsules():
     """
     Função que o scheduler irá executar a cada minuto, usando a hora local (GMT-3).
     """
-    # Esta função agora usa o contexto da app flask,
-    # que por sua vez usa o TZ='America/Sao_Paulo' definido no Render.
     with app.app_context():
         print(f"[{datetime.now()}] Executando job: Verificando cápsulas físicas expiradas...")
         try:
-            # [MUDANÇA DE LÓGICA]
-            # O servidor está em GMT-3, então pegamos a hora local
             now_local_iso = datetime.now().isoformat()
             
-            # Busca cápsulas FÍSICAS, VENCIDAS (na hora local) e NÃO NOTIFICADAS
             response = supabase.table('capsules') \
                 .select('id, release_date, message') \
                 .eq('tipo', 'fisica') \
@@ -296,14 +293,9 @@ def check_capsule(capsule_id):
             return jsonify({"error": "Cápsula não encontrada"}), 404
         capsule = response.data[0]
 
-        # [MUDANÇA DE LÓGICA]
-        # O servidor agora está em GMT-3 (devido ao TZ=America/Sao_Paulo)
         now_local = datetime.now() 
-        
-        # O banco de dados agora guarda a hora local (naive)
         release_date_local = datetime.fromisoformat(capsule['release_date'])
         
-        # A comparação agora é Local vs Local
         if now_local < release_date_local:
             return jsonify({
                 "can_open": False,
