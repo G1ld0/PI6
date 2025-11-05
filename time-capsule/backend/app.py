@@ -58,20 +58,38 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
+# No seu backend/app.py
+
 def publish_to_mqtt(payload_json):
+    """
+    Conecta-se ao broker HiveMQ via TLS e publica uma mensagem.
+    [VERSÃO DE COMPATIBILIDADE - v1.x]
+    """
     try:
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
-        client.tls_set(transport="tcp", tls_version=ssl.PROTOCOL_TLSv1_2)
-        client.tls_insecure_set(False) 
+        
+        # [MUDANÇA] Sintaxe antiga para TLS, sem o 'transport'
+        client.tls_set(
+            ca_certs=None,
+            certfile=None,
+            keyfile=None,
+            cert_reqs=ssl.CERT_REQUIRED, # Força a verificação do certificado
+            tls_version=ssl.PROTOCOL_TLSv1_2
+        )
+        
         print(f"Tentando conectar ao broker MQTT: {MQTT_BROKER_URL}...")
         client.connect(MQTT_BROKER_URL, MQTT_PORT, 60)
+        
         client.publish(MQTT_TOPIC, json.dumps(payload_json))
+        
         client.loop_start()
         client.disconnect()
         client.loop_stop()
         print(f"Mensagem publicada com sucesso no tópico: {MQTT_TOPIC}")
         return True
+
     except Exception as e:
         print(f"!!!!!! ERRO AO PUBLICAR NO MQTT !!!!!!")
         traceback.print_exc()
