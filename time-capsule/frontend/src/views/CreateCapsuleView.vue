@@ -183,15 +183,9 @@ const getCurrentLocation = () => {
 }
 
 const handleSubmit = async () => {
-  // [MUDANÇA] Todas as cápsulas precisam de uma mensagem/nome
   if (!message.value) {
     error.value = 'Por favor, adicione uma mensagem (nome) para a cápsula.'
     return
-  }
-  // Se for digital, mas não tiver mensagem NEM ficheiros (impossível por causa da regra acima)
-  if (capsuleType.value === 'digital' && selectedFiles.value.length === 0 && !message.value) {
-     error.value = 'Uma cápsula digital deve ter uma mensagem ou um ficheiro.'
-     return
   }
 
   isSubmitting.value = true
@@ -206,25 +200,18 @@ const handleSubmit = async () => {
       throw new Error("Usuário não autenticado.")
     }
 
-    // [MUDANÇA] Só faz upload de ficheiros se for 'digital'
     if (capsuleType.value === 'digital') {
       for (const file of selectedFiles.value) {
         const fileType = getFileType(file.type)
         if (fileType === 'other') continue
-
         const fileExt = file.name.split('.').pop()
         const filePath = `user_${userId}/${uuidv4()}.${fileExt}`
-
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('capsule-media')
-          .upload(filePath, file, {
-            contentType: file.type
-          })
-
+          .upload(filePath, file, { contentType: file.type })
         if (uploadError) {
           throw new Error(`Erro no upload do arquivo ${file.name}: ${uploadError.message}`)
         }
-        
         media_files.push({
           storage_path: uploadData.path,
           media_type: fileType
@@ -232,16 +219,14 @@ const handleSubmit = async () => {
       }
     }
 
-    // Converte a data local selecionada para UTC
-    const localDate = new Date(release_date.value);
-    const utcDateString = localDate.toISOString();
-
+    // [MUDANÇA DE LÓGICA]
+    // Não convertemos mais para UTC. Enviamos a string local (naive).
     const payload = {
       message: message.value || null,
-      media_files: media_files, // Estará vazia se for 'fisica'
-      open_date: utcDateString, // Envia em UTC
-      lat: (useLocation.value && capsuleType.value === 'digital') ? lat.value : null, // Só salva 'lat' se for digital
-      lng: (useLocation.value && capsuleType.value === 'digital') ? lng.value : null, // Só salva 'lng' se for digital
+      media_files: media_files,
+      open_date: release_date.value, // <-- ENVIA HORA LOCAL (ex: "2025-11-05T12:33")
+      lat: (useLocation.value && capsuleType.value === 'digital') ? lat.value : null,
+      lng: (useLocation.value && capsuleType.value === 'digital') ? lng.value : null,
       tipo: capsuleType.value
     }
 
@@ -271,7 +256,6 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* Os seus estilos ... */
 .create-container { max-width: 800px; margin: 0 auto; padding: 2rem; }
 .capsule-form { background: #35495e; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
 .form-group { margin-bottom: 1.5rem; }

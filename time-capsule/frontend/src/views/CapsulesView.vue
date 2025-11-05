@@ -69,9 +69,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-// [A CORREÇÃO ESTÁ AQUI]
-import { format, isAfter, parseISO } from 'date-fns'
-// REMOVEMOS O 'ptBR' que estava a causar o erro
+// [MUDANÇA DE LÓGICA]
+// Removemos 'parseISO' e 'isAfter'. Só precisamos de 'format'.
+import { format } from 'date-fns' 
+import { ptBR } from 'date-fns/locale/pt-BR' // Usamos o V3 import
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 
@@ -82,14 +83,12 @@ const capsules = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-// [A CORREÇÃO ESTÁ AQUI]
-// Esta função agora converte a data UTC (15:33 Z) para o fuso horário
-// local (12:33) usando o fuso horário do PRÓPRIO NAVEGADOR.
+// [MUDANÇA DE LÓGICA]
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  const date = parseISO(dateString) // Lê a data UTC
-  // Removemos a opção '{ locale: ptBR }'
-  return format(date, 'dd/MM/yyyy HH:mm') 
+  // A dataString (ex: 2025-11-05T12:33) é lida como local
+  const date = new Date(dateString) 
+  return format(date, 'dd/MM/yyyy HH:mm', { locale: ptBR })
 }
 
 const truncateMessage = (msg) => {
@@ -118,9 +117,12 @@ const fetchCapsules = async () => {
   }
 }
 
+// [MUDANÇA DE LÓGICA]
 const getCapsuleStatus = (capsule) => {
-  const releaseDate = parseISO(capsule.release_date);
-  const dateHasPassed = isAfter(new Date(), releaseDate);
+  // 'new Date(string)' cria uma data local
+  const releaseDate = new Date(capsule.release_date); 
+  // 'new Date()' é a data local atual
+  const dateHasPassed = new Date() > releaseDate; 
   const hasLocation = capsule.lat !== null && capsule.lng !== null;
 
   if (!dateHasPassed) {

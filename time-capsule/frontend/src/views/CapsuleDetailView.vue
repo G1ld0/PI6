@@ -65,9 +65,9 @@ import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
 import LocationMap from '../components/LocationMap.vue'
-// [A CORREÇÃO ESTÁ AQUI]
-import { format, parseISO } from 'date-fns'
-// REMOVEMOS O 'ptBR' que estava a causar o erro
+// [MUDANÇA DE LÓGICA]
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale/pt-BR'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -159,12 +159,12 @@ const fetchCapsule = async () => {
   }
 }
 
-// [A CORREÇÃO ESTÁ AQUI]
+// [MUDANÇA DE LÓGICA]
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  const date = parseISO(dateString) // Lê a data UTC
-  // Removemos a opção '{ locale: ptBR }'
-  return format(date, 'dd MMMM yyyy \'às\' HH:mm')
+  // A dataString (ex: 2025-11-05T12:33) é lida como local
+  const date = new Date(dateString) 
+  return format(date, 'dd MMMM yyyy \'às\' HH:mm', { locale: ptBR })
 }
 
 const reCheck = () => {
@@ -194,16 +194,7 @@ onMounted(() => {
 .media-item img, .media-item video { width: 100%; max-width: 100%; border-radius: 4px; }
 .media-item audio { width: 100%; }
 .back-link { display: inline-block; margin-top: 2rem; color: #42b983; text-decoration: none; }
-
-/* [MUDANÇA] Estilo para a cápsula física destrancada */
-.capsule-physical {
-  text-align: center;
-}
-.capsule-physical h2 {
-  color: #f39c12; /* Cor diferente para IoT */
-}
-.capsule-physical p {
-  font-size: 1.1rem;
-  line-height: 1.6;
-}
+.capsule-physical { text-align: center; }
+.capsule-physical h2 { color: #f39c12; }
+.capsule-physical p { font-size: 1.1rem; line-height: 1.6; }
 </style>
