@@ -60,26 +60,24 @@ scheduler.start()
 
 # No seu backend/app.py
 
+# No seu backend/app.py
+
 def publish_to_mqtt(payload_json):
     """
     Conecta-se ao broker HiveMQ via TLS e publica uma mensagem.
-    [VERSÃO DE COMPATIBILIDADE - v1.x]
+    [VERSÃO MAIS ATUAL - v2.x]
     """
     try:
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         
         client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
         
-        # [MUDANÇA] Sintaxe antiga para TLS, sem o 'transport'
-        client.tls_set(
-            ca_certs=None,
-            certfile=None,
-            keyfile=None,
-            cert_reqs=ssl.CERT_REQUIRED, # Força a verificação do certificado
-            tls_version=ssl.PROTOCOL_TLSv1_2
-        )
+        # [MUDANÇA] Sintaxe nova v2.x para TLS, com o 'transport'
+        # Isto agora irá funcionar porque o requirements.txt força a v2.x
+        client.tls_set(transport="tcp", tls_version=ssl.PROTOCOL_TLSv1_2)
+        client.tls_insecure_set(False) # Garante que o certificado seja validado
         
-        print(f"Tentando conectar ao broker MQTT: {MQTT_BROKER_URL}...")
+        print(f"Tentando conectar ao broker MQTT (v2): {MQTT_BROKER_URL}...")
         client.connect(MQTT_BROKER_URL, MQTT_PORT, 60)
         
         client.publish(MQTT_TOPIC, json.dumps(payload_json))
@@ -91,7 +89,7 @@ def publish_to_mqtt(payload_json):
         return True
 
     except Exception as e:
-        print(f"!!!!!! ERRO AO PUBLICAR NO MQTT !!!!!!")
+        print(f"!!!!!! ERRO AO PUBLICAR NO MQTT (v2) !!!!!!")
         traceback.print_exc()
         return False
 
