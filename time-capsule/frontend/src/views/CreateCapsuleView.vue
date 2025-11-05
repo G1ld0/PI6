@@ -41,6 +41,17 @@
           required
         >
       </div>
+
+      <div class="form-group">
+        <label for="capsuleType">Tipo de Cápsula</label>
+        <select id="capsuleType" v-model="capsuleType" class="select-input" required>
+          <option value="digital">Digital (Abre no site)</option>
+          <option value="fisica">Física (Controla dispositivo IoT)</option>
+        </select>
+        <p class="field-description" v-if="capsuleType === 'fisica'">
+          Isto irá enviar um comando para o seu dispositivo físico (cps-001) na data de liberação.
+        </p>
+      </div>
       
       <div class="form-group">
         <label>
@@ -116,6 +127,7 @@ L.Icon.Default.mergeOptions({
 const message = ref('')
 const selectedFiles = ref([])
 const release_date = ref('')
+const capsuleType = ref('digital') // <-- [NOVA REF ADICIONADA]
 const useLocation = ref(false)
 const lat = ref(null)
 const lng = ref(null)
@@ -228,12 +240,14 @@ const handleSubmit = async () => {
       })
     }
 
+    // [PAYLOAD ATUALIZADO]
     const payload = {
       message: message.value || null,
       media_files: media_files,
       open_date: release_date.value,
       lat: useLocation.value ? lat.value : null,
-      lng: useLocation.value ? lng.value : null
+      lng: useLocation.value ? lng.value : null,
+      tipo: capsuleType.value // <-- [NOVO CAMPO ADICIONADO]
     }
 
     await axios.post(`${import.meta.env.VITE_API_URL}/capsules`, payload, {
@@ -285,6 +299,7 @@ label {
   font-weight: bold;
 }
 
+/* O main.css já deve estar a estilizar estes inputs para o tema escuro */
 input[type="text"],
 input[type="number"],
 input[type="datetime-local"],
@@ -301,7 +316,6 @@ textarea {
   resize: vertical;
 }
 
-/* Novo: Estilo para a lista de arquivos */
 .file-preview-list {
   margin-top: 1rem;
   background: #4a6580;
@@ -378,5 +392,25 @@ textarea {
 .success-message {
   color: #2ecc71;
   margin-top: 1rem;
+}
+
+/* [NOVOS ESTILOS ADICIONADOS] */
+.select-input {
+  /* Estilo para combinar com o main.css escuro */
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #4a6580;
+  background: #35495e;
+  color: white;
+  border-radius: 4px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.field-description {
+  font-size: 0.9rem;
+  color: #c0d0e0; /* Ajustado para o fundo escuro do form */
+  margin-top: 0.5rem;
+  margin-bottom: 0;
 }
 </style>

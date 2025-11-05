@@ -34,11 +34,11 @@
           >
           <div v-else class="media-icon-placeholder">
             <span v-if="getCapsuleStatus(capsule) === 'locked_location'">🔒</span>
-            <span v-else-if="getCapsuleStatus(capsule) === 'available' && !capsule.image_url">🖼️ 📹 🎵</span>
+            <span v-else-if="capsule.tipo === 'fisica'">🤖</span> <span v-else-if="getCapsuleStatus(capsule) === 'available' && !capsule.image_url">🖼️ 📹 🎵</span>
             <span v-else>⏳</span>
             
             <p v-if="getCapsuleStatus(capsule) === 'locked_location'">Requer Localização</p>
-            <p v-else-if="getCapsuleStatus(capsule) === 'available' && !capsule.image_url">Contém Mídias</p>
+            <p v-else-if="capsule.tipo === 'fisica'">Cápsula Física (IoT)</p> <p v-else-if="getCapsuleStatus(capsule) === 'available' && !capsule.image_url">Contém Mídias</p>
             <p v-else>Bloqueada</p>
           </div>
         </div>
@@ -46,7 +46,14 @@
         <div class="capsule-info">
           <h3>{{ truncateMessage(capsule.message || 'Cápsula de Mídias') }}</h3>
           <p class="date-text">{{ formatDate(capsule.release_date) }}</p>
-        </div>
+
+          <span 
+            class="capsule-type-badge" 
+            :class="capsule.tipo === 'fisica' ? 'iot' : 'digital'"
+          >
+            {{ capsule.tipo === 'fisica' ? 'Física (IoT)' : 'Digital' }}
+          </span>
+          </div>
 
         <div class="capsule-status" :class="statusClass(capsule)">
           {{ statusText(capsule) }}
@@ -91,6 +98,7 @@ const fetchCapsules = async () => {
     const response = await axios.get(`${import.meta.env.VITE_API_URL}/capsules`, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
+    // Agora o 'response.data.capsules' já inclui o campo 'tipo'
     capsules.value = response.data.capsules.sort((a, b) => 
       new Date(b.created_at) - new Date(a.created_at)
     )
@@ -101,9 +109,11 @@ const fetchCapsules = async () => {
   }
 }
 
-// [MUDANÇA] Lógica de status corrigida
 const getCapsuleStatus = (capsule) => {
-  const dateHasPassed = isAfter(new Date(), parseISO(capsule.release_date));
+  // A data de 'release_date' vem como string ISO (ex: "2025-11-05T14:00:00")
+  // Precisamos convertê-la para um objeto Date para comparar.
+  const releaseDate = parseISO(capsule.release_date);
+  const dateHasPassed = isAfter(new Date(), releaseDate);
   const hasLocation = capsule.lat !== null && capsule.lng !== null;
 
   if (!dateHasPassed) {
@@ -223,6 +233,7 @@ h1 {
   justify-content: center;
   color: #5a7a96;
   text-align: center;
+  padding: 1rem;
 }
 .media-icon-placeholder span {
   font-size: 2.5rem;
@@ -235,7 +246,7 @@ h1 {
 
 .capsule-info {
   padding: 1rem;
-  flex-grow: 1;
+  flex-grow: 1; 
 }
 
 .capsule-info h3 {
@@ -247,24 +258,4 @@ h1 {
 
 .capsule-info .date-text {
   font-size: 0.9rem;
-  color: #5a7a96;
-  margin: 0;
-}
-
-.capsule-status {
-  padding: 0.75rem 1rem;
-  text-align: center;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.capsule-status.available {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-}
-
-.capsule-status.locked {
-  background-color: #fff3e0;
-  color: #e65100;
-}
-</style>
+  color
