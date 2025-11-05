@@ -69,9 +69,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-// [CORREÇÃO DE FUSO] Importa 'date-fns' para formatar datas
+// [A CORREÇÃO DE FUSO ESTÁ AQUI]
 import { format, isAfter, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale' // Importa a localização pt-BR
+import { ptBR } from 'date-fns/locale' 
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 
@@ -82,8 +82,8 @@ const capsules = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-// [CORREÇÃO DE FUSO]
-// Esta função lê a data UTC (14:45 Z) e a converte para o fuso local (11:45)
+// [A CORREÇÃO DE FUSO ESTÁ AQUI]
+// Esta função lê a data UTC (15:03 Z) e a converte para o fuso local (12:03)
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const date = parseISO(dateString) // Lê a data UTC
@@ -116,9 +116,7 @@ const fetchCapsules = async () => {
   }
 }
 
-// [CORREÇÃO DE FUSO]
-// Esta função compara a data UTC do DB com a data local do browser
-// 'isAfter' gere os fusos horários corretamente.
+// 'isAfter' (da date-fns) gere fusos horários corretamente.
 const getCapsuleStatus = (capsule) => {
   const releaseDate = parseISO(capsule.release_date);
   const dateHasPassed = isAfter(new Date(), releaseDate);
@@ -171,7 +169,6 @@ h1 { color: white; text-align: center; margin-bottom: 2rem; }
 .capsule-info { padding: 1rem; flex-grow: 1; }
 .capsule-info h3 { margin: 0 0 0.5rem 0; font-size: 1.1rem; font-weight: 600; color: #2c3e50; }
 .capsule-info .date-text { font-size: 0.9rem; color: #5a7a96; margin: 0; margin-bottom: 0.75rem; }
-/* [O ESTILO QUE FALTAVA] */
 .capsule-type-badge { font-size: 0.75rem; font-weight: 600; padding: 3px 8px; border-radius: 12px; display: inline-block; }
 .capsule-type-badge.digital { background-color: #e0f2fe; color: #0284c7; }
 .capsule-type-badge.iot { background-color: #fef3c7; color: #b45309; }
