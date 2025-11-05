@@ -7,12 +7,9 @@
       <div class="form-group">
         <label for="capsuleType">Tipo de Cápsula</label>
         <select id="capsuleType" v-model="capsuleType" class="select-input" required>
-          <option value="digital">Digital (Abre no site)</option>
-          <option value="fisica">Física (Controla dispositivo IoT)</option>
+          <option value="digital">Digital</option>
+          <option value="fisica">Física</option>
         </select>
-        <p class="field-description" v-if="capsuleType === 'fisica'">
-          Isto irá enviar um comando para o seu dispositivo físico (cps-001) na data de liberação.
-        </p>
       </div>
       
       <div class="form-group">
