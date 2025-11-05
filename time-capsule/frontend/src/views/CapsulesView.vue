@@ -67,6 +67,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { format, isAfter, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale' // Importa a localização pt-BR
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 
@@ -79,7 +80,10 @@ const error = ref(null)
 
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  return format(parseISO(dateString), 'dd/MM/yyyy HH:mm')
+  // [CORREÇÃO DE FUSO HORÁRIO]
+  // parseISO vai ler a data UTC e o 'format' vai convertê-la para o fuso local do usuário
+  const date = parseISO(dateString)
+  return format(date, 'dd/MM/yyyy HH:mm', { locale: ptBR })
 }
 
 const truncateMessage = (msg) => {
@@ -98,7 +102,6 @@ const fetchCapsules = async () => {
     const response = await axios.get(`${import.meta.env.VITE_API_URL}/capsules`, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
-    // Agora o 'response.data.capsules' já inclui o campo 'tipo'
     capsules.value = response.data.capsules.sort((a, b) => 
       new Date(b.created_at) - new Date(a.created_at)
     )
@@ -109,9 +112,11 @@ const fetchCapsules = async () => {
   }
 }
 
+// [CORREÇÃO DE FUSO HORÁRIO]
+// A lógica do getCapsuleStatus está correta, pois 'parseISO'
+// vai ler a string UTC e 'new Date()' é o tempo local.
+// 'isAfter' (da date-fns) gere fusos horários corretamente.
 const getCapsuleStatus = (capsule) => {
-  // A data de 'release_date' vem como string ISO (ex: "2025-11-05T14:00:00")
-  // Precisamos convertê-la para um objeto Date para comparar.
   const releaseDate = parseISO(capsule.release_date);
   const dateHasPassed = isAfter(new Date(), releaseDate);
   const hasLocation = capsule.lat !== null && capsule.lng !== null;
@@ -258,4 +263,43 @@ h1 {
 
 .capsule-info .date-text {
   font-size: 0.9rem;
-  color
+  color: #5a7a96;
+  margin: 0;
+  margin-bottom: 0.75rem; /* Espaço para o indicador */
+}
+
+/* [O ESTILO QUE FALTAVA] */
+.capsule-type-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+.capsule-type-badge.digital {
+  background-color: #e0f2fe; /* Azul claro */
+  color: #0284c7; /* Azul escuro */
+}
+.capsule-type-badge.iot {
+  background-color: #fef3c7; /* Amarelo claro */
+  color: #b45309; /* Amarelo escuro */
+}
+/* [FIM DOS NOVOS ESTILOS] */
+
+.capsule-status {
+  padding: 0.75rem 1rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.capsule-status.available {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.capsule-status.locked {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+</style>

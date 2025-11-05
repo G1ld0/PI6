@@ -337,10 +337,11 @@ def check_capsule(capsule_id):
             return jsonify({"error": "Cápsula não encontrada"}), 404
         capsule = response.data[0]
 
-        now = datetime.now()
-        release_date = datetime.fromisoformat(capsule['release_date'])
+        now_utc = datetime.now(timezone.utc) # <-- Pega a hora atual em UTC, com fuso
+        # O Python lê a string UTC (ex: ...Z) e a converte para um objeto datetime com fuso
+        release_date_utc = datetime.fromisoformat(capsule['release_date']) 
         
-        if now < release_date:
+        if now_utc < release_date_utc:
             return jsonify({
                 "can_open": False,
                 "reason": f"Disponível em {release_date.strftime('%d/%m/%Y %H:%M')}"

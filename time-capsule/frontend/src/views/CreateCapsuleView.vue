@@ -241,13 +241,16 @@ const handleSubmit = async () => {
     }
 
     // [PAYLOAD ATUALIZADO]
+    const localDate = new Date(release_date.value);
+    const utcDateString = localDate.toISOString(); // (ex: "2025-11-05T13:55:00.000Z")
+
     const payload = {
       message: message.value || null,
       media_files: media_files,
-      open_date: release_date.value,
+      open_date: utcDateString, // <-- Envia a data em UTC
       lat: useLocation.value ? lat.value : null,
       lng: useLocation.value ? lng.value : null,
-      tipo: capsuleType.value // <-- [NOVO CAMPO ADICIONADO]
+      tipo: capsuleType.value
     }
 
     await axios.post(`${import.meta.env.VITE_API_URL}/capsules`, payload, {
