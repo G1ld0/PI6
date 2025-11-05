@@ -67,8 +67,7 @@ import { useAuthStore } from '../stores/auth'
 import LocationMap from '../components/LocationMap.vue'
 // [A CORREÇÃO ESTÁ AQUI]
 import { format, parseISO } from 'date-fns'
-// O 'locale' agora é importado de um caminho mais específico
-import { ptBR } from 'date-fns/locale/pt-BR'
+// REMOVEMOS O 'ptBR' que estava a causar o erro
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -160,11 +159,12 @@ const fetchCapsule = async () => {
   }
 }
 
-// Esta função agora funcionará corretamente
+// [A CORREÇÃO ESTÁ AQUI]
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const date = parseISO(dateString) // Lê a data UTC
-  return format(date, 'dd MMMM yyyy \'às\' HH:mm', { locale: ptBR }) // Formata para local
+  // Removemos a opção '{ locale: ptBR }'
+  return format(date, 'dd MMMM yyyy \'às\' HH:mm')
 }
 
 const reCheck = () => {

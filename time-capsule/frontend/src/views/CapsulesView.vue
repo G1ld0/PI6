@@ -71,8 +71,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 // [A CORREÇÃO ESTÁ AQUI]
 import { format, isAfter, parseISO } from 'date-fns'
-// O 'locale' agora é importado de um caminho mais específico
-import { ptBR } from 'date-fns/locale/pt-BR' 
+// REMOVEMOS O 'ptBR' que estava a causar o erro
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 
@@ -83,11 +82,14 @@ const capsules = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-// Esta função agora funcionará corretamente
+// [A CORREÇÃO ESTÁ AQUI]
+// Esta função agora converte a data UTC (15:33 Z) para o fuso horário
+// local (12:33) usando o fuso horário do PRÓPRIO NAVEGADOR.
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const date = parseISO(dateString) // Lê a data UTC
-  return format(date, 'dd/MM/yyyy HH:mm', { locale: ptBR }) // Formata para local
+  // Removemos a opção '{ locale: ptBR }'
+  return format(date, 'dd/MM/yyyy HH:mm') 
 }
 
 const truncateMessage = (msg) => {
