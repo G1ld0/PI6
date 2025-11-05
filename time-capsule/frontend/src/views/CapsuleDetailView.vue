@@ -65,9 +65,10 @@ import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
 import LocationMap from '../components/LocationMap.vue'
-// [CORREÇÃO DE FUSO] Importa 'date-fns'
+// [A CORREÇÃO ESTÁ AQUI]
 import { format, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+// O 'locale' agora é importado de um caminho mais específico
+import { ptBR } from 'date-fns/locale/pt-BR'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -129,20 +130,15 @@ const fetchCapsule = async () => {
     
     checkResult.value = checkResponse.data
 
-    // 2. Busca os dados completos da cápsula (SEMPRE)
-    // para mostrar a data de liberação (se estiver trancada)
-    // ou o conteúdo (se estiver aberta)
     try {
       const capsuleInfo = await axios.get(
         `${import.meta.env.VITE_API_URL}/capsules/${capsuleId}`,
         { headers: { Authorization: `Bearer ${authStore.token}` } }
       )
       
-      // Se pode abrir, salva os dados completos
       if (checkResult.value.can_open) {
         capsule.value = capsuleInfo.data
       } else {
-        // Se está trancada, salva apenas a data e localização para mostrar
         capsuleDate.value = capsuleInfo.data.release_date
         if (capsuleInfo.data.lat && capsuleInfo.data.lng) {
           capsuleLatLgn.value = { lat: capsuleInfo.data.lat, lng: capsuleInfo.data.lng }
@@ -150,12 +146,10 @@ const fetchCapsule = async () => {
       }
 
     } catch (infoError) {
-      // Falha ao buscar os dados da cápsula (ex: Erro 500)
       error.value = infoError.response?.data?.error || 'Erro ao carregar dados da cápsula.'
     }
 
   } catch (err) {
-    // Falha ao fazer o CHECK (ex: Erro 500 no /check)
     if (err.response) {
       error.value = err.response.data?.error || 'Erro ao verificar cápsula.'
     } else {
@@ -166,7 +160,7 @@ const fetchCapsule = async () => {
   }
 }
 
-// [CORREÇÃO DE FUSO]
+// Esta função agora funcionará corretamente
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const date = parseISO(dateString) // Lê a data UTC

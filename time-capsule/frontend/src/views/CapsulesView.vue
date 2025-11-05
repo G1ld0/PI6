@@ -69,9 +69,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-// [A CORREÇÃO DE FUSO ESTÁ AQUI]
+// [A CORREÇÃO ESTÁ AQUI]
 import { format, isAfter, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale' 
+// O 'locale' agora é importado de um caminho mais específico
+import { ptBR } from 'date-fns/locale/pt-BR' 
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 
@@ -82,8 +83,7 @@ const capsules = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-// [A CORREÇÃO DE FUSO ESTÁ AQUI]
-// Esta função lê a data UTC (15:03 Z) e a converte para o fuso local (12:03)
+// Esta função agora funcionará corretamente
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const date = parseISO(dateString) // Lê a data UTC
@@ -116,7 +116,6 @@ const fetchCapsules = async () => {
   }
 }
 
-// 'isAfter' (da date-fns) gere fusos horários corretamente.
 const getCapsuleStatus = (capsule) => {
   const releaseDate = parseISO(capsule.release_date);
   const dateHasPassed = isAfter(new Date(), releaseDate);
